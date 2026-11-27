@@ -11,7 +11,7 @@ public final class LinkService {
     public enum Reason { LIMIT, EXPIRED, DELETED }
     public record Link(String code, UUID owner, URI target, Instant expires, int limit, int visits) {}
     public record Closed(String code, UUID owner, Reason reason, Instant closedAt, boolean seen) {}
-    public record State(Set<UUID> users, List<Link> links, List<Closed> closed) {}
+    public record State(Set<UUID> users, List<Link> links, List<Closed> closed, Set<String> issuedCodes) {}
     public record Visit(URI target, Reason reason) {}
 
     private final Clock clock;
@@ -20,6 +20,7 @@ public final class LinkService {
     private final int maxLimit;
     private final Supplier<String> codes;
     private final Set<UUID> users;
+    private final Set<String> issuedCodes;
     private final Map<String, Link> links = new LinkedHashMap<>();
     private final Map<String, Closed> closed = new LinkedHashMap<>();
 
@@ -31,16 +32,19 @@ public final class LinkService {
         this.maxLimit = maxLimit;
         this.codes = codes;
         users = new HashSet<>(state.users());
+        issuedCodes = new HashSet<>(state.issuedCodes());
         for (Link link : state.links()) {
             links.put(link.code(), link);
+            issuedCodes.add(link.code());
         }
         for (Closed item : state.closed()) {
             closed.put(item.code(), item);
+            issuedCodes.add(item.code());
         }
     }
 
     public static State emptyState() {
-        return new State(Set.of(), List.of(), List.of());
+        return new State(Set.of(), List.of(), List.of(), Set.of());
     }
 
     public static URI target(String value) {
@@ -67,7 +71,7 @@ public final class LinkService {
         String code;
         do {
             code = codes.get();
-        } while (links.containsKey(code) || closed.containsKey(code));
+        } while (!issuedCodes.add(code));
         Link link = new Link(code, owner, destination, clock.instant().plus(ttl), limit, 0);
         links.put(code, link);
         return link;
@@ -89,7 +93,9 @@ public final class LinkService {
         Link current = owned(owner, code);
         URI destination = url == null ? current.target() : target(url);
         int updatedLimit = limit == null ? current.limit() : limit;
-        checkLimit(updatedLimit);
+        if (limit != null) {
+            checkLimit(updatedLimit);
+        }
         if (updatedLimit <= current.visits()) {
             throw new IllegalArgumentException("Новый лимит должен быть больше числа уже учтённых переходов.");
         }
@@ -151,7 +157,7 @@ public final class LinkService {
 
     public synchronized State snapshot() {
         sweep();
-        return new State(Set.copyOf(users), List.copyOf(links.values()), List.copyOf(closed.values()));
+        return new State(Set.copyOf(users), List.copyOf(links.values()), List.copyOf(closed.values()), Set.copyOf(issuedCodes));
     }
 
     private Link owned(UUID owner, String code) {

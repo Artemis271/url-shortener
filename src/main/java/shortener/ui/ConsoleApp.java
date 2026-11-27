@@ -51,12 +51,12 @@ public final class ConsoleApp {
     public void run() throws IOException {
         output.println("Сервис коротких ссылок. Список команд: help");
         while (true) {
-            notices();
+            notices(false);
             output.print("shortener> ");
             output.flush();
             String line = input.readLine();
             if (line == null || line.strip().equals("exit")) {
-                notices();
+                notices(false);
                 return;
             }
             try {
@@ -71,7 +71,7 @@ public final class ConsoleApp {
         }
     }
 
-    private void execute(String[] parts) throws IOException {
+    private synchronized void execute(String[] parts) throws IOException {
         switch (parts[0]) {
             case "help" -> output.print(HELP);
             case "short" -> {
@@ -150,11 +150,24 @@ public final class ConsoleApp {
             base + link.code(), link.target(), link.visits(), link.limit(), link.expires());
     }
 
-    private void notices() {
-        if (user != null) {
-            links.notices(user).forEach(item ->
-                output.println("Уведомление " + base + item.code() + ": " + RedirectServer.unavailable(item.reason())));
+    public synchronized void showPendingNotices() {
+        if (notices(true)) {
+            output.print("shortener> ");
+            output.flush();
         }
+    }
+
+    private synchronized boolean notices(boolean redraw) {
+        if (user != null) {
+            var pending = links.notices(user);
+            if (redraw && !pending.isEmpty()) {
+                output.println();
+            }
+            pending.forEach(item ->
+                output.println("Уведомление " + base + item.code() + ": " + RedirectServer.unavailable(item.reason())));
+            return !pending.isEmpty();
+        }
+        return false;
     }
 
     private UUID owner() {

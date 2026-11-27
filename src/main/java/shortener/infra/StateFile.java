@@ -23,6 +23,7 @@ public final class StateFile {
             return LinkService.emptyState();
         }
         var users = new HashSet<UUID>();
+        var issued = new HashSet<String>();
         var links = new ArrayList<LinkService.Link>();
         var closed = new ArrayList<LinkService.Closed>();
         try {
@@ -33,6 +34,7 @@ public final class StateFile {
                 String[] f = row.split("\t", -1);
                 switch (f[0]) {
                     case "U" -> users.add(UUID.fromString(f[1]));
+                    case "I" -> issued.add(f[1]);
                     case "L" -> links.add(new LinkService.Link(f[1], UUID.fromString(f[2]), URI.create(f[3]),
                         Instant.parse(f[4]), Integer.parseInt(f[5]), Integer.parseInt(f[6])));
                     case "C" -> closed.add(new LinkService.Closed(f[1], UUID.fromString(f[2]),
@@ -43,12 +45,13 @@ public final class StateFile {
         } catch (RuntimeException error) {
             throw new IOException("Повреждён файл состояния " + path + ".", error);
         }
-        return new LinkService.State(users, links, closed);
+        return new LinkService.State(users, links, closed, issued);
     }
 
     public void save(LinkService.State state) throws IOException {
         StringBuilder content = new StringBuilder(VERSION).append('\n');
         state.users().stream().sorted().forEach(user -> row(content, "U", user));
+        state.issuedCodes().stream().sorted().forEach(code -> row(content, "I", code));
         state.links().forEach(link -> row(content, "L", link.code(), link.owner(), link.target().toASCIIString(),
             link.expires(), link.limit(), link.visits()));
         state.closed().forEach(item -> row(content, "C", item.code(), item.owner(), item.reason(),

@@ -53,9 +53,13 @@ public final class Main {
                      var scheduler = Executors.newSingleThreadScheduledExecutor();
                      var input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))) {
                     long interval = config.cleanupInterval().toMillis();
-                    var cleanup = scheduler.scheduleWithFixedDelay(links::sweep, 0, interval, TimeUnit.MILLISECONDS);
+                    var console = new ConsoleApp(links, server.base(), config.defaultLimit(), Main::openBrowser, input, System.out);
+                    var cleanup = scheduler.scheduleWithFixedDelay(() -> {
+                        links.sweep();
+                        console.showPendingNotices();
+                    }, 0, interval, TimeUnit.MILLISECONDS);
                     try {
-                        new ConsoleApp(links, server.base(), config.defaultLimit(), Main::openBrowser, input, System.out).run();
+                        console.run();
                     } finally {
                         cleanup.cancel(false);
                     }
