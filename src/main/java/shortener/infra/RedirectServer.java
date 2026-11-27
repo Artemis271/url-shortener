@@ -29,7 +29,11 @@ public final class RedirectServer implements AutoCloseable {
             exchange.getResponseHeaders().set("Cache-Control", "no-store");
             if (!exchange.getRequestMethod().equals("GET")) {
                 exchange.getResponseHeaders().set("Allow", "GET");
-                send(exchange, 405, "Используйте GET.");
+                if (exchange.getRequestMethod().equals("HEAD")) {
+                    exchange.sendResponseHeaders(405, -1);
+                } else {
+                    send(exchange, 405, "Используйте GET.");
+                }
                 return;
             }
 
